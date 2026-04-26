@@ -1,0 +1,134 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required, email format)
+    //   - displayName: string (required)
+    //   - role: string (required, ['kid', 'parent', 'admin'])
+    //   - familyId: string (optional)
+    //   - points: number (optional, for kids)
+    //   - createdAt: number (required)
+    //
+    // Collection: families
+    // Document ID: {familyId}
+    // Fields:
+    //   - id: string (required)
+    //   - name: string (required)
+    //   - parentIds: list (required)
+    //   - kidIds: list (required)
+    //   - createdAt: number (required)
+    //
+    // Collection: tasks
+    // Document ID: {taskId}
+    // Fields:
+    //   - id: string (required)
+    //   - title: string (required)
+    //   - description: string (optional)
+    //   - points: number (required)
+    //   - assignedTo: string (required, kidId)
+    //   - createdBy: string (required, parentId)
+    //   - familyId: string (required)
+    //   - status: string (required, ['pending', 'completed', 'approved'])
+    //   - createdAt: number (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "sarangblazicon@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isParentOfFamily(familyId) {
+      return isAuthenticated() && familyId in get(/databases/$(database)/documents/families/$(familyId)).data.parentIds;
+    }
+    
+    function isMemberOfFamily(familyId) {
+      let user = getUserData();
+      return isAuthenticated() && user.familyId == familyId;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.uid is string && data.uid.size() > 0 &&
+             data.email is string && isValidEmail(data.email) &&
+             data.role in ['kid', 'parent', 'admin'] &&
+             data.createdAt is number;
+    }
+
+    function isValidTask(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() < 100 &&
+             data.points is number && data.points >= 0 &&
+             data.status in ['pending', 'completed', 'approved'] &&
+             data.familyId is string &&
+             data.assignedTo is string &&
+             data.createdBy is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && 
+                    (isOwner(userId) && request.resource.data.role != 'admin' || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && 
+                    (isOwner(userId) && request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    match /families/{familyId} {
+      allow read: if isAuthenticated() && (isMemberOfFamily(familyId) || isAdmin());
+      allow create: if isAuthenticated(); // Simplified for onboarding
+      allow update: if isAuthenticated() && (isParentOfFamily(familyId) || isAdmin());
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isAuthenticated() && (isMemberOfFamily(resource.data.familyId) || isAdmin());
+      allow create: if isAuthenticated() && isValidTask(request.resource.data) && 
+                    (isParentOfFamily(request.resource.data.familyId) || isAdmin());
+      allow update: if isAuthenticated() && isValidTask(request.resource.data) && 
+                    (isMemberOfFamily(resource.data.familyId) || isAdmin());
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

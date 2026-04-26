@@ -1,0 +1,5 @@
+{
+  "name": "KidTasker",
+  "description": "A fun and gamified task management app for kids with parent and admin controls.",
+  "requestFramePermissions": []
+}

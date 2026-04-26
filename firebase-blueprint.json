@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "users": {
+      "title": "User Profile",
+      "description": "Stores user profile information and roles.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["kid", "parent", "admin"] },
+        "familyId": { "type": "string" },
+        "points": { "type": "number" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["uid", "email", "role", "createdAt"]
+    },
+    "families": {
+      "title": "Family",
+      "description": "Groups parents and kids together.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "parentIds": { "type": "array", "items": { "type": "string" } },
+        "kidIds": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "name", "parentIds", "kidIds", "createdAt"]
+    },
+    "tasks": {
+      "title": "Task",
+      "description": "Tasks assigned to kids by parents.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "points": { "type": "number" },
+        "assignedTo": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "familyId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "completed", "approved"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "title", "points", "assignedTo", "createdBy", "familyId", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "users",
+      "description": "User profile documents."
+    },
+    "/families/{familyId}": {
+      "schema": "families",
+      "description": "Family group documents."
+    },
+    "/tasks/{taskId}": {
+      "schema": "tasks",
+      "description": "Task documents."
+    }
+  }
+}
