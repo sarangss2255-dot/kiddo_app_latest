@@ -11,7 +11,9 @@ export default function ParentDashboard() {
   const [tasks, setTasks] = React.useState<Task[]>([]);
   const [kids, setKids] = React.useState<UserProfile[]>([]);
   const [showAddTask, setShowAddTask] = React.useState(false);
-  const [newTask, setNewTask] = React.useState({ title: '', description: '', points: '10', assignedTo: '', dueDate: '' });
+  const [newTask, setNewTask] = React.useState({ title: '', description: '', points: '10', assignedTo: '', dueDate: '', category: 'Chores' });
+
+  const categories = ['Chores', 'Homework', 'Errands', 'Health'];
 
   React.useEffect(() => {
     if (!profile?.familyId) return;
@@ -127,6 +129,11 @@ export default function ParentDashboard() {
                     <View style={[styles.statusBadge, task.status === 'completed' ? styles.statusSuccess : styles.statusPending]}>
                        <Text style={[styles.statusText, task.status === 'completed' ? styles.statusTextSuccess : styles.statusTextPending]}>{task.status}</Text>
                     </View>
+                    {task.category && (
+                      <View style={styles.categoryBadge}>
+                        <Text style={styles.categoryText}>{task.category}</Text>
+                      </View>
+                    )}
                     <Text style={styles.itemTitle}>{task.title}</Text>
                   </View>
                   <Text style={styles.itemDesc}>{task.description}</Text>
@@ -179,13 +186,18 @@ export default function ParentDashboard() {
                 placeholder="Make sure to put away all the toys!"
               />
 
-              <Text style={styles.label}>Due Date (YYYY-MM-DD)</Text>
-              <TextInput 
-                style={styles.input}
-                value={newTask.dueDate}
-                onChangeText={text => setNewTask({...newTask, dueDate: text})}
-                placeholder="2024-12-31"
-              />
+              <Text style={styles.label}>Category</Text>
+              <View style={styles.categoryContainer}>
+                {categories.map(cat => (
+                  <TouchableOpacity 
+                    key={cat}
+                    style={[styles.catBtn, newTask.category === cat && styles.catBtnActive]}
+                    onPress={() => setNewTask({...newTask, category: cat})}
+                  >
+                    <Text style={[styles.catText, newTask.category === cat && styles.catTextActive]}>{cat}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
               <Text style={styles.label}>Due Date (YYYY-MM-DD)</Text>
               <TextInput 
@@ -266,6 +278,13 @@ const styles = StyleSheet.create({
   statusTextPending: { color: '#92400e' },
   statusTextSuccess: { color: '#166534' },
   itemTitle: { fontSize: 16, fontWeight: '800', color: '#1e293b' },
+  categoryBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, backgroundColor: '#e2e8f0', marginBottom: 4 },
+  categoryText: { fontSize: 10, fontWeight: '700', color: '#64748b', textTransform: 'uppercase' },
+  categoryContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  catBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#e2e8f0' },
+  catBtnActive: { backgroundColor: '#4f46e5', borderColor: '#4f46e5' },
+  catText: { fontSize: 12, color: '#64748b' },
+  catTextActive: { color: '#ffffff', fontWeight: '700' },
   itemDesc: { fontSize: 14, color: '#64748b', marginBottom: 6 },
   itemAssignee: { fontSize: 11, color: '#94a3b8' },
   taskMetaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },

@@ -28,6 +28,7 @@ export interface Task {
   createdBy: string; // parentId
   familyId: string;
   status: 'pending' | 'completed' | 'approved';
+  category?: string;
   dueDate?: number;
   createdAt: number;
   completedAt?: number;

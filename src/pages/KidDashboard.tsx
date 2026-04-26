@@ -28,7 +28,14 @@ function TaskCard({ task, onComplete }: { task: Task; onComplete: (id: string) =
     >
       <View style={styles.taskInfo}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.taskTitle}>{task.title}</Text>
+          <View style={styles.titleRow}>
+            {task.category && (
+              <View style={styles.categoryBadge}>
+                <Text style={styles.categoryText}>{task.category}</Text>
+              </View>
+            )}
+            <Text style={styles.taskTitle}>{task.title}</Text>
+          </View>
           <Text style={styles.taskDesc}>{task.description}</Text>
           {task.dueDate && (
             <View style={styles.dueDateBadge}>
@@ -228,6 +235,25 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     color: '#1f2937',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginBottom: 4,
+  },
+  categoryBadge: {
+    backgroundColor: '#e0f2fe',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  categoryText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0369a1',
+    textTransform: 'uppercase',
   },
   taskDesc: {
     fontSize: 14,
