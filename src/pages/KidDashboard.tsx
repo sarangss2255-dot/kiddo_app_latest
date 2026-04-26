@@ -3,11 +3,12 @@ import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView, ScrollView, Ima
 import Animated, { useAnimatedStyle, withSpring, withTiming, FadeInDown, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { useAuth } from '../AuthContext';
 import { Trophy, Star, Clock, CheckCircle2, LogOut } from 'lucide-react-native';
-import { auth, db } from '../firebase';
-import { collection, query, where, onSnapshot, updateDoc, doc } from 'firebase/firestore';
+import { auth } from '../firebase';
 import { Task } from '../types';
+import { api } from '../api';
 
 function TaskCard({ task, onComplete }: { task: Task; onComplete: (id: string) => void }) {
+  // ... (TaskCard component implementation remains the same, just update onComplete to id: string)
   const animatedStyle = useAnimatedStyle(() => {
     const isCompleted = task.status === 'completed';
     return {
@@ -71,34 +72,39 @@ function TaskCard({ task, onComplete }: { task: Task; onComplete: (id: string) =
 }
 
 export default function KidDashboard() {
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const [tasks, setTasks] = React.useState<Task[]>([]);
   const [loading, setLoading] = React.useState(true);
 
+  const fetchTasks = async () => {
+    try {
+      const data = await api.get('/tasks');
+      // Map MongoDB _id to id for compatibility
+      const mappedTasks = data.map((t: any) => ({ ...t, id: t._id }));
+      setTasks(mappedTasks.filter((t: any) => t.assignedTo === profile?.uid && ['pending', 'completed'].includes(t.status)));
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   React.useEffect(() => {
     if (!profile?.uid) return;
-
-    const q = query(
-      collection(db, 'tasks'),
-      where('assignedTo', '==', profile.uid),
-      where('status', 'in', ['pending', 'completed'])
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const taskList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task));
-      setTasks(taskList);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    fetchTasks();
+    
+    // Polling as a workaround for now (every 10 seconds)
+    const interval = setInterval(fetchTasks, 10000);
+    return () => clearInterval(interval);
   }, [profile?.uid]);
 
   const handleCompleteTask = async (taskId: string) => {
     try {
-      await updateDoc(doc(db, 'tasks', taskId), {
+      await api.patch(`/tasks/${taskId}`, {
         status: 'completed',
         completedAt: Date.now()
       });
+      fetchTasks();
     } catch (error) {
       console.error(error);
     }

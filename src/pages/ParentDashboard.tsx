@@ -1,68 +1,90 @@
 import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView, FlatList, TextInput, Modal, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useAuth } from '../AuthContext';
-import { Plus, Users, CheckCircle2, XCircle, LayoutDashboard, LogOut, Star } from 'lucide-react-native';
-import { auth, db } from '../firebase';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, increment } from 'firebase/firestore';
+import { Plus, Users, CheckCircle2, XCircle, LayoutDashboard, LogOut, Star, Pencil } from 'lucide-react-native';
+import { auth } from '../firebase';
 import { Task, UserProfile } from '../types';
+import { api } from '../api';
 
 export default function ParentDashboard() {
   const { profile } = useAuth();
   const [tasks, setTasks] = React.useState<Task[]>([]);
   const [kids, setKids] = React.useState<UserProfile[]>([]);
   const [showAddTask, setShowAddTask] = React.useState(false);
+  const [editingTaskId, setEditingTaskId] = React.useState<string | null>(null);
   const [newTask, setNewTask] = React.useState({ title: '', description: '', points: '10', assignedTo: '', dueDate: '', category: 'Chores' });
 
   const categories = ['Chores', 'Homework', 'Errands', 'Health'];
 
-  React.useEffect(() => {
+  const fetchData = async () => {
     if (!profile?.familyId) return;
+    try {
+      const [tasksData, kidsData] = await Promise.all([
+        api.get('/tasks'),
+        api.get('/kids')
+      ]);
+      setTasks(tasksData.map((t: any) => ({ ...t, id: t._id })));
+      setKids(kidsData.map((k: any) => ({ ...k, uid: k.firebaseUid })));
+    } catch (error) {
+      console.error('Fetch error:', error);
+    }
+  };
 
-    const tasksQuery = query(collection(db, 'tasks'), where('familyId', '==', profile.familyId));
-    const unsubscribeTasks = onSnapshot(tasksQuery, (snapshot) => {
-      setTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task)));
-    });
-
-    const kidsQuery = query(
-      collection(db, 'users'), 
-      where('familyId', '==', profile.familyId),
-      where('role', '==', 'kid')
-    );
-    const unsubscribeKids = onSnapshot(kidsQuery, (snapshot) => {
-      setKids(snapshot.docs.map(doc => doc.data() as UserProfile));
-    });
-
-    return () => {
-      unsubscribeTasks();
-      unsubscribeKids();
-    };
+  React.useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 10000);
+    return () => clearInterval(interval);
   }, [profile?.familyId]);
 
-  const handleAddTask = async () => {
+  const handleSaveTask = async () => {
     if (!profile?.familyId || !auth.currentUser) return;
     if (!newTask.title || !newTask.assignedTo) return;
 
     try {
-      await addDoc(collection(db, 'tasks'), {
+      const taskData = {
         ...newTask,
         points: parseInt(newTask.points),
-        dueDate: newTask.dueDate ? new Date(newTask.dueDate).getTime() : null,
+        dueDate: newTask.dueDate ? new Date(newTask.dueDate).toISOString() : null,
         familyId: profile.familyId,
-        createdBy: auth.currentUser.uid,
-        status: 'pending',
-        createdAt: Date.now()
-      });
-      setShowAddTask(false);
-      setNewTask({ title: '', description: '', points: '10', assignedTo: '', dueDate: '' });
+        updatedAt: Date.now()
+      };
+
+      if (editingTaskId) {
+        await api.patch(`/tasks/${editingTaskId}`, taskData);
+      } else {
+        await api.post('/tasks', taskData);
+      }
+      
+      fetchData();
+      handleCloseModal();
     } catch (error) {
       console.error(error);
     }
   };
 
+  const startEditTask = (task: Task) => {
+    setEditingTaskId(task.id);
+    setNewTask({
+      title: task.title,
+      description: task.description || '',
+      points: String(task.points),
+      assignedTo: task.assignedTo,
+      dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
+      category: task.category || 'Chores'
+    });
+    setShowAddTask(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowAddTask(false);
+    setEditingTaskId(null);
+    setNewTask({ title: '', description: '', points: '10', assignedTo: '', dueDate: '', category: 'Chores' });
+  };
+
   const approveTask = async (task: Task) => {
     try {
-      await updateDoc(doc(db, 'tasks', task.id), { status: 'approved', approvedAt: Date.now() });
-      await updateDoc(doc(db, 'users', task.assignedTo), { points: increment(task.points) });
+      await api.post(`/tasks/${task.id}/approve`, {});
+      fetchData();
     } catch (error) {
       console.error(error);
     }
@@ -145,7 +167,12 @@ export default function ParentDashboard() {
                   </View>
                </View>
                <View style={styles.taskActions}>
-                  <Text style={styles.itemPoints}>{task.points} pts</Text>
+                  <View style={styles.actionRow}>
+                    <TouchableOpacity onPress={() => startEditTask(task)} style={styles.editIcon}>
+                       <Pencil color="#6366f1" size={16} />
+                    </TouchableOpacity>
+                    <Text style={styles.itemPoints}>{task.points} pts</Text>
+                  </View>
                   {task.status === 'completed' && (
                     <TouchableOpacity onPress={() => approveTask(task)} style={styles.approveIcon}>
                        <CheckCircle2 color="#fff" size={24} />
@@ -161,8 +188,8 @@ export default function ParentDashboard() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Assign Mission</Text>
-              <TouchableOpacity onPress={() => setShowAddTask(false)}>
+              <Text style={styles.modalTitle}>{editingTaskId ? 'Edit Mission' : 'Assign Mission'}</Text>
+              <TouchableOpacity onPress={handleCloseModal}>
                 <XCircle color="#94a3b8" size={24} />
               </TouchableOpacity>
             </View>
@@ -233,8 +260,8 @@ export default function ParentDashboard() {
                 </View>
               </View>
 
-              <TouchableOpacity onPress={handleAddTask} style={styles.submitBtn}>
-                 <Text style={styles.submitBtnText}>Launch Mission 🚀</Text>
+              <TouchableOpacity onPress={handleSaveTask} style={styles.submitBtn}>
+                 <Text style={styles.submitBtnText}>{editingTaskId ? 'Update Mission' : 'Launch Mission 🚀'}</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -291,7 +318,9 @@ const styles = StyleSheet.create({
   itemDueDate: { fontSize: 11, color: '#ef4444', fontWeight: '700' },
   bold: { color: '#475569', fontWeight: '800' },
   taskActions: { alignItems: 'flex-end', marginLeft: 16 },
-  itemPoints: { fontWeight: '900', color: '#4f46e5', marginBottom: 8 },
+  actionRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
+  editIcon: { padding: 4, backgroundColor: '#f5f3ff', borderRadius: 6 },
+  itemPoints: { fontWeight: '900', color: '#4f46e5' },
   approveIcon: { backgroundColor: '#22c55e', padding: 8, borderRadius: 12 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 30, height: '85%' },

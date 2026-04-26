@@ -1,11 +1,13 @@
 import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { Baby, Users, ShieldAlert } from 'lucide-react-native';
-import { auth, db } from '../firebase';
-import { doc, setDoc, addDoc, collection } from 'firebase/firestore';
-import { UserRole, UserProfile } from '../types';
+import { auth } from '../firebase';
+import { UserRole } from '../types';
+import { api } from '../api';
+import { useAuth } from '../AuthContext';
 
 export default function Onboarding({ navigation }: any) {
+  const { refreshProfile } = useAuth();
   const [role, setRole] = React.useState<UserRole | null>(null);
   const [familyName, setFamilyName] = React.useState('');
   const [loading, setLoading] = React.useState(false);
@@ -14,29 +16,18 @@ export default function Onboarding({ navigation }: any) {
     if (!auth.currentUser || !role) return;
     setLoading(true);
     try {
-      let familyId = '';
-      if (role === 'parent') {
-        const familyRef = await addDoc(collection(db, 'families'), {
-          name: familyName,
-          parentIds: [auth.currentUser.uid],
-          kidIds: [],
-          createdAt: Date.now()
-        });
-        familyId = familyRef.id;
-      }
-
-      const profile: UserProfile = {
-        uid: auth.currentUser.uid,
-        email: auth.currentUser.email || '',
+      // Create family and register user in MongoDB via API
+      // For simplicity, we send both in one register call or let the backend handle it
+      await api.post('/register', {
+        firebaseUid: auth.currentUser.uid,
+        email: auth.currentUser.email,
         displayName: auth.currentUser.displayName || 'New User',
-        role: role,
-        familyId: familyId || undefined,
-        createdAt: Date.now(),
-        points: role === 'kid' ? 0 : undefined
-      };
+        role,
+        familyName: familyName || 'Our Awesome Family'
+      });
 
-      await setDoc(doc(db, 'users', auth.currentUser.uid), profile);
-      // Navigation will be handled by App.tsx observer
+      await refreshProfile();
+      // Navigation will be handled by App.tsx observer through refreshProfile update
     } catch (error) {
       console.error(error);
     } finally {
